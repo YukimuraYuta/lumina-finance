@@ -26,6 +26,9 @@ const Transactions: React.FC = () => {
     updateTransaction,
     deleteTransaction,
     exportTransactionsCSV,
+    loading,
+    error,
+    refreshData,
   } = useFinance()
 
   // Search & Filter State
@@ -231,18 +234,63 @@ const Transactions: React.FC = () => {
         </div>
       </div>
 
+      {error && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: '#f87171',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+            onClick={() => refreshData()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Transaction Table / List Component */}
-      <TransactionTable
-        transactions={filteredTransactions}
-        onEdit={handleOpenEdit}
-        onDelete={handleOpenDelete}
-        onAddNew={() => {
-          setEditingTx(null)
-          setIsFormOpen(true)
-        }}
-        onClearFilters={handleClearFilters}
-        hasActiveFilters={hasActiveFilters}
-      />
+      {loading && transactions.length === 0 ? (
+        <div className="table-card" style={{ padding: '3.5rem', textAlign: 'center' }}>
+          <div
+            style={{
+              margin: '0 auto 1rem',
+              width: '32px',
+              height: '32px',
+              border: '3px solid rgba(255,255,255,0.1)',
+              borderTopColor: '#6366f1',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Connecting and loading transactions from server...
+          </p>
+        </div>
+      ) : (
+        <TransactionTable
+          transactions={filteredTransactions}
+          onEdit={handleOpenEdit}
+          onDelete={handleOpenDelete}
+          onAddNew={() => {
+            setEditingTx(null)
+            setIsFormOpen(true)
+          }}
+          onClearFilters={handleClearFilters}
+          hasActiveFilters={hasActiveFilters}
+        />
+      )}
 
       {/* Form Modal (Add & Edit) */}
       <TransactionForm

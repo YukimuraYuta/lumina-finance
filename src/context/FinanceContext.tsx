@@ -14,6 +14,9 @@ import {
   mockBudgets as initialMockBudgets,
   mockGoals as initialMockGoals,
 } from '../utils/mockData'
+import { transactionService } from '../services/transactionService'
+import { budgetService } from '../services/budgetService'
+import { goalService } from '../services/goalService'
 
 const STORAGE_KEYS = {
   TRANSACTIONS: 'lumina_transactions_v1',
@@ -41,6 +44,9 @@ interface FinanceContextType {
   goals: Goal[]
   user: UserProfile
   toast: ToastNotification | null
+  loading: boolean
+  error: string | null
+  refreshData: () => Promise<void>
   
   // Derived Data
   summary: DashboardSummary
@@ -52,24 +58,24 @@ interface FinanceContextType {
   formatAmount: (amount: number) => string
   
   // Transactions Actions
-  addTransaction: (tx: Omit<Transaction, 'id'> & { id?: string }) => Transaction
-  updateTransaction: (tx: Transaction) => void
-  deleteTransaction: (id: string) => void
+  addTransaction: (tx: Omit<Transaction, 'id'> & { id?: string }) => Promise<Transaction>
+  updateTransaction: (tx: Transaction) => Promise<void>
+  deleteTransaction: (id: string) => Promise<void>
   
   // Budgets Actions
-  addBudget: (budget: Omit<Budget, 'id' | 'spent'> & { id?: string; spent?: number }) => Budget
-  updateBudget: (budget: Budget) => void
-  deleteBudget: (id: string) => void
+  addBudget: (budget: Omit<Budget, 'id' | 'spent'> & { id?: string; spent?: number }) => Promise<Budget>
+  updateBudget: (budget: Budget) => Promise<void>
+  deleteBudget: (id: string) => Promise<void>
   
   // Goals Actions
-  addGoal: (goal: Omit<Goal, 'id' | 'currentAmount'> & { id?: string; currentAmount?: number }) => Goal
-  updateGoal: (goal: Goal) => void
-  deleteGoal: (id: string) => void
-  contributeToGoal: (id: string, amount: number) => void
+  addGoal: (goal: Omit<Goal, 'id' | 'currentAmount'> & { id?: string; currentAmount?: number }) => Promise<Goal>
+  updateGoal: (goal: Goal) => Promise<void>
+  deleteGoal: (id: string) => Promise<void>
+  contributeToGoal: (id: string, amount: number) => Promise<void>
   
   // Preferences & System Actions
   updateUserProfile: (profile: Partial<UserProfile>) => void
-  resetToDemoData: () => void
+  resetToDemoData: () => Promise<void>
   exportDataAsJSON: () => void
   exportTransactionsCSV: () => void
   
@@ -135,6 +141,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // 5. Toast Notifications
   const [toast, setToast] = useState<ToastNotification | null>(null)
 
+  // 6. Loading and Error State
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+
   const showToast = useCallback((message: string, type: ToastNotification['type'] = 'success') => {
     const id = `toast-${Date.now()}`
     setToast({ id, message, type })
@@ -153,7 +163,33 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearTimeout(timer)
   }, [toast])
 
-  // Persist State to LocalStorage
+  // Initial Data Fetching from Live Backend
+  const refreshData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [txResult, budgetResult, goalResult] = await Promise.all([
+        transactionService.getAll(),
+        budgetService.getAll(),
+        goalService.getAll(),
+      ])
+
+      setTransactions(txResult.transactions)
+      setBudgets(budgetResult)
+      setGoals(goalResult)
+    } catch (err: any) {
+      console.warn('Backend API connection warning (using local/cached state):', err.message)
+      setError(err.message || 'Unable to connect to live server')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshData()
+  }, [refreshData])
+
+  // Persist State to LocalStorage as cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions))
@@ -202,20 +238,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     [user.currency]
   )
-
-  // Dynamic budgets with spending calculated from transactions
-  const activeBudgets = useMemo(() => {
-    return budgets.map((b) => {
-      const categorySpent = transactions
-        .filter((t) => t.type === 'expense' && t.category.toLowerCase() === b.category.toLowerCase())
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      return {
-        ...b,
-        spent: categorySpent > 0 ? categorySpent : b.spent,
-      }
-    })
-  }, [budgets, transactions])
 
   // Dynamic Dashboard Summary
   const summary: DashboardSummary = useMemo(() => {
@@ -267,19 +289,16 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Dynamic Spending Trends
   const spendingTrends: DailySpending[] = useMemo(() => {
-    // If no transactions, fallback to mock trends
     if (transactions.length === 0) {
       return mockDashboardData.spendingTrends
     }
 
-    // Default template days
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const dayData: Record<string, { amount: number; income: number }> = {}
     days.forEach((d) => {
       dayData[d] = { amount: 0, income: 0 }
     })
 
-    // Populate from recent transactions
     transactions.slice(0, 14).forEach((tx, idx) => {
       const day = days[idx % days.length]
       if (tx.type === 'expense') {
@@ -298,128 +317,193 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // --- Transaction Handlers ---
   const addTransaction = useCallback(
-    (txData: Omit<Transaction, 'id'> & { id?: string }): Transaction => {
-      const newTx: Transaction = {
-        ...txData,
-        id: txData.id || `tx-${Date.now()}`,
+    async (txData: Omit<Transaction, 'id'> & { id?: string }): Promise<Transaction> => {
+      try {
+        const created = await transactionService.create({
+          description: txData.description,
+          category: txData.category,
+          amount: txData.amount,
+          type: txData.type,
+          date: txData.date,
+          iconName: txData.iconName,
+          notes: txData.notes,
+        })
+        setTransactions((prev) => [created, ...prev])
+        showToast(`Added "${created.description}" (+${formatAmount(created.amount)})`, 'success')
+
+        // Re-fetch budgets to sync dynamic spending calculations
+        budgetService.getAll().then(setBudgets).catch(() => {})
+        return created
+      } catch (err: any) {
+        showToast(err.message || 'Failed to create transaction', 'error')
+        throw err
       }
-      setTransactions((prev) => [newTx, ...prev])
-      showToast(`Added "${newTx.description}" (+${formatAmount(newTx.amount)})`, 'success')
-      return newTx
     },
     [formatAmount, showToast]
   )
 
   const updateTransaction = useCallback(
-    (tx: Transaction) => {
-      setTransactions((prev) => prev.map((t) => (t.id === tx.id ? tx : t)))
-      showToast(`Updated "${tx.description}"`, 'info')
+    async (tx: Transaction): Promise<void> => {
+      try {
+        const updated = await transactionService.update(tx.id, tx)
+        setTransactions((prev) => prev.map((t) => (t.id === tx.id ? updated : t)))
+        showToast(`Updated "${tx.description}"`, 'info')
+
+        // Re-sync budgets
+        budgetService.getAll().then(setBudgets).catch(() => {})
+      } catch (err: any) {
+        showToast(err.message || 'Failed to update transaction', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   const deleteTransaction = useCallback(
-    (id: string) => {
-      setTransactions((prev) => {
-        const item = prev.find((t) => t.id === id)
-        const updated = prev.filter((t) => t.id !== id)
-        if (item) {
-          showToast(`Deleted transaction "${item.description}"`, 'info')
-        }
-        return updated
-      })
+    async (id: string): Promise<void> => {
+      try {
+        await transactionService.delete(id)
+        setTransactions((prev) => {
+          const item = prev.find((t) => t.id === id)
+          if (item) {
+            showToast(`Deleted transaction "${item.description}"`, 'info')
+          }
+          return prev.filter((t) => t.id !== id)
+        })
+
+        // Re-sync budgets
+        budgetService.getAll().then(setBudgets).catch(() => {})
+      } catch (err: any) {
+        showToast(err.message || 'Failed to delete transaction', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   // --- Budget Handlers ---
   const addBudget = useCallback(
-    (budgetData: Omit<Budget, 'id' | 'spent'> & { id?: string; spent?: number }): Budget => {
-      const newBudget: Budget = {
-        ...budgetData,
-        id: budgetData.id || `b-${Date.now()}`,
-        spent: budgetData.spent ?? 0,
+    async (budgetData: Omit<Budget, 'id' | 'spent'> & { id?: string; spent?: number }): Promise<Budget> => {
+      try {
+        const created = await budgetService.create({
+          category: budgetData.category,
+          limit: budgetData.limit,
+          period: budgetData.period,
+          startDate: budgetData.startDate,
+          endDate: budgetData.endDate,
+          notes: budgetData.notes,
+        })
+        setBudgets((prev) => [...prev, created])
+        showToast(`Created budget for ${created.category}`, 'success')
+        return created
+      } catch (err: any) {
+        showToast(err.message || 'Failed to create budget', 'error')
+        throw err
       }
-      setBudgets((prev) => [...prev, newBudget])
-      showToast(`Created budget for ${newBudget.category}`, 'success')
-      return newBudget
     },
     [showToast]
   )
 
   const updateBudget = useCallback(
-    (budget: Budget) => {
-      setBudgets((prev) => prev.map((b) => (b.id === budget.id ? budget : b)))
-      showToast(`Updated ${budget.category} budget`, 'info')
+    async (budget: Budget): Promise<void> => {
+      try {
+        const updated = await budgetService.update(budget.id, budget)
+        setBudgets((prev) => prev.map((b) => (b.id === budget.id ? updated : b)))
+        showToast(`Updated ${budget.category} budget`, 'info')
+      } catch (err: any) {
+        showToast(err.message || 'Failed to update budget', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   const deleteBudget = useCallback(
-    (id: string) => {
-      setBudgets((prev) => {
-        const item = prev.find((b) => b.id === id)
-        const updated = prev.filter((b) => b.id !== id)
-        if (item) {
-          showToast(`Removed budget for ${item.category}`, 'info')
-        }
-        return updated
-      })
+    async (id: string): Promise<void> => {
+      try {
+        await budgetService.delete(id)
+        setBudgets((prev) => {
+          const item = prev.find((b) => b.id === id)
+          if (item) {
+            showToast(`Removed budget for ${item.category}`, 'info')
+          }
+          return prev.filter((b) => b.id !== id)
+        })
+      } catch (err: any) {
+        showToast(err.message || 'Failed to delete budget', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   // --- Goals Handlers ---
   const addGoal = useCallback(
-    (goalData: Omit<Goal, 'id' | 'currentAmount'> & { id?: string; currentAmount?: number }): Goal => {
-      const newGoal: Goal = {
-        ...goalData,
-        id: goalData.id || `g-${Date.now()}`,
-        currentAmount: goalData.currentAmount ?? 0,
-        color: goalData.color || '#3b82f6',
+    async (goalData: Omit<Goal, 'id' | 'currentAmount'> & { id?: string; currentAmount?: number }): Promise<Goal> => {
+      try {
+        const created = await goalService.create({
+          title: goalData.title,
+          targetAmount: goalData.targetAmount,
+          currentAmount: goalData.currentAmount,
+          deadline: goalData.deadline,
+          category: goalData.category,
+          color: goalData.color,
+        })
+        setGoals((prev) => [...prev, created])
+        showToast(`Created milestone goal: ${created.title}`, 'success')
+        return created
+      } catch (err: any) {
+        showToast(err.message || 'Failed to create goal', 'error')
+        throw err
       }
-      setGoals((prev) => [...prev, newGoal])
-      showToast(`Created milestone goal: ${newGoal.title}`, 'success')
-      return newGoal
     },
     [showToast]
   )
 
   const updateGoal = useCallback(
-    (goal: Goal) => {
-      setGoals((prev) => prev.map((g) => (g.id === goal.id ? goal : g)))
-      showToast(`Updated goal: ${goal.title}`, 'info')
+    async (goal: Goal): Promise<void> => {
+      try {
+        const updated = await goalService.update(goal.id, goal)
+        setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)))
+        showToast(`Updated goal: ${goal.title}`, 'info')
+      } catch (err: any) {
+        showToast(err.message || 'Failed to update goal', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   const deleteGoal = useCallback(
-    (id: string) => {
-      setGoals((prev) => {
-        const item = prev.find((g) => g.id === id)
-        const updated = prev.filter((g) => g.id !== id)
-        if (item) {
-          showToast(`Removed goal "${item.title}"`, 'info')
-        }
-        return updated
-      })
+    async (id: string): Promise<void> => {
+      try {
+        await goalService.delete(id)
+        setGoals((prev) => {
+          const item = prev.find((g) => g.id === id)
+          if (item) {
+            showToast(`Removed goal "${item.title}"`, 'info')
+          }
+          return prev.filter((g) => g.id !== id)
+        })
+      } catch (err: any) {
+        showToast(err.message || 'Failed to delete goal', 'error')
+        throw err
+      }
     },
     [showToast]
   )
 
   const contributeToGoal = useCallback(
-    (id: string, amount: number) => {
+    async (id: string, amount: number): Promise<void> => {
       if (amount <= 0) return
-      setGoals((prev) =>
-        prev.map((g) => {
-          if (g.id === id) {
-            const nextAmount = g.currentAmount + amount
-            showToast(`Added ${formatAmount(amount)} to "${g.title}"! 🎉`, 'success')
-            return { ...g, currentAmount: nextAmount }
-          }
-          return g
-        })
-      )
+      try {
+        const updated = await goalService.contribute(id, amount)
+        setGoals((prev) => prev.map((g) => (g.id === id ? updated : g)))
+        showToast(`Added ${formatAmount(amount)} to "${updated.title}"! 🎉`, 'success')
+      } catch (err: any) {
+        showToast(err.message || 'Failed to contribute to goal', 'error')
+        throw err
+      }
     },
     [formatAmount, showToast]
   )
@@ -436,7 +520,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [showToast]
   )
 
-  const resetToDemoData = useCallback(() => {
+  const resetToDemoData = useCallback(async () => {
     localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS)
     localStorage.removeItem(STORAGE_KEYS.BUDGETS)
     localStorage.removeItem(STORAGE_KEYS.GOALS)
@@ -497,10 +581,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const contextValue = useMemo<FinanceContextType>(
     () => ({
       transactions,
-      budgets: activeBudgets,
+      budgets,
       goals,
       user,
       toast,
+      loading,
+      error,
+      refreshData,
       summary,
       categorySpending,
       spendingTrends,
@@ -525,10 +612,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }),
     [
       transactions,
-      activeBudgets,
+      budgets,
       goals,
       user,
       toast,
+      loading,
+      error,
+      refreshData,
       summary,
       categorySpending,
       spendingTrends,

@@ -1,6 +1,10 @@
 import express, { Application } from 'express'
 import cors from 'cors'
 import healthRoutes from './routes/health.routes'
+import transactionRoutes from './routes/transaction.routes'
+import budgetRoutes from './routes/budget.routes'
+import goalRoutes from './routes/goal.routes'
+import analyticsRoutes from './routes/analytics.routes'
 import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler'
 
 const app: Application = express()
@@ -11,7 +15,7 @@ app.use(
   cors({
     origin: allowedOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
     credentials: true,
   })
 )
@@ -22,6 +26,10 @@ app.use(express.urlencoded({ extended: true }))
 
 // Register API Routes
 app.use('/api/health', healthRoutes)
+app.use('/api/transactions', transactionRoutes)
+app.use('/api/budgets', budgetRoutes)
+app.use('/api/goals', goalRoutes)
+app.use('/api/analytics', analyticsRoutes)
 
 // 404 Handler for unmatched routes
 app.use(notFoundHandler)

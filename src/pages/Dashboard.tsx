@@ -19,6 +19,8 @@ const Dashboard: React.FC = () => {
     user,
     goals,
     addTransaction,
+    error,
+    refreshData,
   } = useFinance()
 
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -53,6 +55,32 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {error && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: '#f87171',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+            onClick={() => refreshData()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Summary Cards Section */}
       <section className="dashboard-summary-grid" aria-label="Financial Summary Cards">

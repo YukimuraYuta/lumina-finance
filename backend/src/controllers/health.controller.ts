@@ -6,6 +6,7 @@ import { Request, Response } from 'express'
 export const getHealthStatus = (_req: Request, res: Response): void => {
   res.status(200).json({
     success: true,
+    status: 'ok',
     message: 'Lumina Finance API is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',

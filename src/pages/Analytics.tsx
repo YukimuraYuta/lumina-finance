@@ -35,7 +35,15 @@ const PERIOD_OPTIONS: { label: string; value: PeriodType }[] = [
 
 const Analytics: React.FC = () => {
   const [period, setPeriod] = useState<PeriodType>('month')
-  const { transactions, budgets, goals, formatAmount } = useFinance()
+  const {
+    transactions,
+    budgets,
+    goals,
+    formatAmount,
+    loading,
+    error,
+    refreshData,
+  } = useFinance()
 
   // 1. Calculate Summary Totals
   const summary = useMemo(() => {
@@ -78,6 +86,36 @@ const Analytics: React.FC = () => {
 
   const hasTransactions = transactions && transactions.length > 0
 
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="analytics-page">
+        <header className="page-header">
+          <div>
+            <h1 className="page-title">Analytics</h1>
+            <p className="page-subtitle">Understand your spending and financial habits.</p>
+          </div>
+        </header>
+
+        <div className="table-card" style={{ padding: '3.5rem', textAlign: 'center' }}>
+          <div
+            style={{
+              margin: '0 auto 1rem',
+              width: '32px',
+              height: '32px',
+              border: '3px solid rgba(255,255,255,0.1)',
+              borderTopColor: '#6366f1',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Connecting and loading analytics from server...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (!hasTransactions) {
     return (
       <div className="analytics-page">
@@ -87,6 +125,32 @@ const Analytics: React.FC = () => {
             <p className="page-subtitle">Understand your spending and financial habits.</p>
           </div>
         </header>
+
+        {error && (
+          <div
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              marginBottom: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              color: '#f87171',
+            }}
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+              onClick={() => refreshData()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="table-card empty-table-container">
           <div className="empty-state">
@@ -127,6 +191,32 @@ const Analytics: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {error && (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: '#f87171',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+            onClick={() => refreshData()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Top Analytics Summary Cards */}
       <section className="analytics-summary-grid" aria-label="Financial Summary Cards">
