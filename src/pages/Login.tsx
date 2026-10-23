@@ -129,7 +129,7 @@ const Login: React.FC = () => {
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {/* Email Input */}
           <div className="form-group">
             <label className="form-label" htmlFor="login-email">

@@ -1,11 +1,7 @@
-import dotenv from 'dotenv'
-
-// Load environment variables before initializing the application
-dotenv.config()
-
+import { config } from './config/env'
 import app from './app'
 
-const PORT = parseInt(process.env.PORT || '5000', 10)
+const PORT = config.PORT
 
 const server = app.listen(PORT, () => {
   console.log(`Lumina Finance API running on: http://localhost:${PORT}`)

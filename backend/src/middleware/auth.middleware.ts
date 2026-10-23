@@ -52,7 +52,6 @@ export const authenticate = async (
 ) => {
   try {
     const authHeader = req.headers.authorization
-    const customUserId = req.headers['x-user-id'] as string | undefined
 
     // 1. Extract token from HTTP-only Cookie or Authorization Bearer header
     let token: string | null = null
@@ -94,44 +93,9 @@ export const authenticate = async (
       }
     }
 
-    // 2. Custom header support for tests or local service communication
-    if (customUserId) {
-      const user = await prisma.user.findUnique({ where: { id: customUserId } })
-      if (user) {
-        req.userId = user.id
-        req.user = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          currency: user.currency,
-          theme: user.theme,
-        }
-        return next()
-      }
-    }
-
-    // 3. In development or test, fall back to ensureDevUser ONLY if explicitly enabled
-    if (process.env.NODE_ENV !== 'production' && !authHeader && !req.headers['x-disable-dev-auth']) {
-      const userId = await ensureDevUser()
-      const user = await prisma.user.findUnique({ where: { id: userId } })
-      if (user) {
-        req.userId = user.id
-        req.user = {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          currency: user.currency,
-          theme: user.theme,
-        }
-        return next()
-      }
-    }
-
     return res.status(401).json({
       success: false,
-      message: 'Authentication required. Missing or invalid Authorization header.',
+      message: 'Authentication required. Missing or invalid authentication token.',
     })
   } catch (error) {
     return next(error)

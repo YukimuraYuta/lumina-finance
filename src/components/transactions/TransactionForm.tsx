@@ -90,7 +90,7 @@ const TransactionFormContent: React.FC<
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} aria-hidden="true">
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}

@@ -144,9 +144,16 @@ describe('Lumina Finance Authentication & Security Suite', () => {
     })
 
     it('rejects request without credentials with 401 Unauthorized', async () => {
+      const res = await request(app).get('/api/auth/me')
+
+      expect(res.status).toBe(401)
+      expect(res.body.success).toBe(false)
+    })
+
+    it('rejects spoofed x-user-id header without valid token with 401 Unauthorized', async () => {
       const res = await request(app)
         .get('/api/auth/me')
-        .set('x-disable-dev-auth', 'true')
+        .set('x-user-id', authUserId)
 
       expect(res.status).toBe(401)
       expect(res.body.success).toBe(false)
@@ -328,6 +335,42 @@ describe('Lumina Finance Authentication & Security Suite', () => {
       // User B has created 0 transactions, so totals must be 0
       expect(analyticsRes.body.data.totalIncome).toBe(0)
       expect(analyticsRes.body.data.totalExpenses).toBe(0)
+    })
+  })
+
+  describe('Server Hardening & Security Controls', () => {
+    it('applies Helmet security headers (nosniff, frameguard, etc.)', async () => {
+      const res = await request(app).get('/api/health')
+
+      expect(res.headers['x-content-type-options']).toBe('nosniff')
+      expect(res.headers['x-frame-options']).toBe('SAMEORIGIN')
+      expect(res.headers['x-dns-prefetch-control']).toBe('off')
+    })
+
+    it('rejects payload exceeding request body limit (100kb) with 413', async () => {
+      const oversizedPayload = {
+        name: 'Big Name',
+        email: 'big@lumina.test',
+        password: 'Password123!',
+        notes: 'A'.repeat(120 * 1024), // 120KB payload
+      }
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send(oversizedPayload)
+
+      expect(res.status).toBe(413)
+    })
+
+    it('returns generic error on invalid JSON request body with 400 Bad Request', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .set('Content-Type', 'application/json')
+        .send('{ invalid json: true ')
+
+      expect(res.status).toBe(400)
+      expect(res.body.success).toBe(false)
+      expect(res.body.message).toMatch(/invalid json/i)
     })
   })
 })

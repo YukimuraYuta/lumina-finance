@@ -9,14 +9,10 @@ import type {
   UserProfile,
   ToastNotification,
 } from '../types/finance'
-import {
-  mockDashboardData,
-  mockBudgets as initialMockBudgets,
-  mockGoals as initialMockGoals,
-} from '../utils/mockData'
 import { transactionService } from '../services/transactionService'
 import { budgetService } from '../services/budgetService'
 import { goalService } from '../services/goalService'
+import { useAuth } from './AuthContext'
 
 const STORAGE_KEYS = {
   TRANSACTIONS: 'lumina_transactions_v1',
@@ -87,63 +83,41 @@ interface FinanceContextType {
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined)
 
 const DEFAULT_USER: UserProfile = {
-  name: 'Arnav',
+  name: 'Student',
   role: 'Student',
   currency: '₹',
   theme: 'system',
 }
 
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Transactions State
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS)
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-    return mockDashboardData.recentTransactions
-  })
+  const { user: authUser, isAuthenticated, isLoading: authLoading, updateUser: updateAuthUser } = useAuth()
 
-  // 2. Budgets State
-  const [budgets, setBudgets] = useState<Budget[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.BUDGETS)
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-    return initialMockBudgets
-  })
+  // 1. Financial Records State (strictly isolated to authenticated user session)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [budgets, setBudgets] = useState<Budget[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
 
-  // 3. Goals State
-  const [goals, setGoals] = useState<Goal[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.GOALS)
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-    return initialMockGoals
-  })
+  // 2. User Profile State
+  const [user, setUser] = useState<UserProfile>(DEFAULT_USER)
 
-  // 4. User Profile State
-  const [user, setUser] = useState<UserProfile>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.USER_PROFILE)
-      if (stored) return JSON.parse(stored)
-    } catch {
-      // ignore
-    }
-    return DEFAULT_USER
-  })
-
-  // 5. Toast Notifications
+  // 3. Toast Notifications
   const [toast, setToast] = useState<ToastNotification | null>(null)
 
-  // 6. Loading and Error State
+  // 4. Loading and Error State
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Sync profile when authenticated user details update
+  useEffect(() => {
+    if (authUser) {
+      setUser({
+        name: authUser.name,
+        role: authUser.role || 'Student',
+        currency: authUser.currency || '₹',
+        theme: (authUser.theme as any) || 'system',
+      })
+    }
+  }, [authUser])
 
   const showToast = useCallback((message: string, type: ToastNotification['type'] = 'success') => {
     const id = `toast-${Date.now()}`
@@ -163,8 +137,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearTimeout(timer)
   }, [toast])
 
-  // Initial Data Fetching from Live Backend
+  // Data Fetching from Live Backend scoped strictly to authenticated user
   const refreshData = useCallback(async () => {
+    if (!isAuthenticated) return
     setLoading(true)
     setError(null)
     try {
@@ -178,50 +153,30 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setBudgets(budgetResult)
       setGoals(goalResult)
     } catch (err: any) {
-      console.warn('Backend API connection warning (using local/cached state):', err.message)
       setError(err.message || 'Unable to connect to live server')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [isAuthenticated])
 
+  // Lifecycle handler for session changes: fetch when authenticated, wipe when unauthenticated
   useEffect(() => {
-    refreshData()
-  }, [refreshData])
-
-  // Persist State to LocalStorage as cache
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions))
-    } catch (e) {
-      console.error('Failed saving transactions to storage', e)
+    if (!isAuthenticated && !authLoading) {
+      setTransactions([])
+      setBudgets([])
+      setGoals([])
+      setLoading(false)
+      setError(null)
+      localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS)
+      localStorage.removeItem(STORAGE_KEYS.BUDGETS)
+      localStorage.removeItem(STORAGE_KEYS.GOALS)
+    } else if (isAuthenticated) {
+      refreshData()
     }
-  }, [transactions])
+  }, [isAuthenticated, authLoading, refreshData])
 
+  // Apply theme dynamically
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(budgets))
-    } catch (e) {
-      console.error('Failed saving budgets to storage', e)
-    }
-  }, [budgets])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals))
-    } catch (e) {
-      console.error('Failed saving goals to storage', e)
-    }
-  }, [goals])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user))
-    } catch (e) {
-      console.error('Failed saving user profile to storage', e)
-    }
-
-    // Apply theme
     if (user.theme === 'dark') {
       document.documentElement.setAttribute('data-theme', 'dark')
     } else if (user.theme === 'light') {
@@ -229,7 +184,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } else {
       document.documentElement.removeAttribute('data-theme')
     }
-  }, [user])
+  }, [user.theme])
 
   // Format localized currency
   const formatAmount = useCallback(
@@ -271,7 +226,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const categories = Object.keys(expenseTotals)
     if (categories.length === 0) {
-      return mockDashboardData.categorySpending
+      return []
     }
 
     return categories
@@ -289,24 +244,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Dynamic Spending Trends
   const spendingTrends: DailySpending[] = useMemo(() => {
-    if (transactions.length === 0) {
-      return mockDashboardData.spendingTrends
-    }
-
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     const dayData: Record<string, { amount: number; income: number }> = {}
     days.forEach((d) => {
       dayData[d] = { amount: 0, income: 0 }
     })
 
-    transactions.slice(0, 14).forEach((tx, idx) => {
-      const day = days[idx % days.length]
-      if (tx.type === 'expense') {
-        dayData[day].amount += tx.amount
-      } else {
-        dayData[day].income += tx.amount
-      }
-    })
+    if (transactions.length > 0) {
+      transactions.slice(0, 14).forEach((tx, idx) => {
+        const day = days[idx % days.length]
+        if (tx.type === 'expense') {
+          dayData[day].amount += tx.amount
+        } else {
+          dayData[day].income += tx.amount
+        }
+      })
+    }
 
     return days.map((d) => ({
       day: d,
@@ -510,27 +463,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // --- User Profile & Preferences Handlers ---
   const updateUserProfile = useCallback(
-    (profile: Partial<UserProfile>) => {
-      setUser((prev) => {
-        const updated = { ...prev, ...profile }
+    async (profile: Partial<UserProfile>) => {
+      setUser((prev) => ({ ...prev, ...profile }))
+      try {
+        await updateAuthUser(profile)
         showToast('Settings saved successfully', 'success')
-        return updated
-      })
+      } catch (err: any) {
+        showToast(err.message || 'Failed to save settings', 'error')
+      }
     },
-    [showToast]
+    [updateAuthUser, showToast]
   )
 
   const resetToDemoData = useCallback(async () => {
-    localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS)
-    localStorage.removeItem(STORAGE_KEYS.BUDGETS)
-    localStorage.removeItem(STORAGE_KEYS.GOALS)
-    localStorage.removeItem(STORAGE_KEYS.USER_PROFILE)
-    setTransactions(mockDashboardData.recentTransactions)
-    setBudgets(initialMockBudgets)
-    setGoals(initialMockGoals)
-    setUser(DEFAULT_USER)
-    showToast('Reset data to initial demo state', 'info')
-  }, [showToast])
+    await refreshData()
+    showToast('Refreshed latest data from server', 'info')
+  }, [refreshData, showToast])
 
   const exportDataAsJSON = useCallback(() => {
     const data = {

@@ -153,7 +153,7 @@ const Register: React.FC = () => {
         )}
 
         {/* Register Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
           {/* Full Name */}
           <div className="form-group">
             <label className="form-label" htmlFor="reg-name">

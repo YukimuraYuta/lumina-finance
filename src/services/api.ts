@@ -12,25 +12,12 @@ export const apiClient = axios.create({
   },
 })
 
-// Request interceptor: attach auth token if available in localStorage
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('lumina_auth_token')
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
-
-// Response interceptor: standardize error messages and clear stale auth on 401
+// Response interceptor: standardize error messages and notify on 401 session expiry
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ message?: string; errors?: any }>) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('lumina_auth_token')
-      localStorage.removeItem('lumina_auth_user')
+      window.dispatchEvent(new CustomEvent('lumina-auth-expired'))
     }
     const customMessage =
       error.response?.data?.message || error.message || 'An unexpected error occurred'

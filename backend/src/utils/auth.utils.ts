@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'lumina_super_secret_jwt_key_2026_finance_student_app'
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
+import { config } from '../config/env'
+
+const JWT_SECRET = config.JWT_SECRET
+const JWT_EXPIRES_IN = config.JWT_EXPIRES_IN
 
 export interface TokenPayload {
   userId: string

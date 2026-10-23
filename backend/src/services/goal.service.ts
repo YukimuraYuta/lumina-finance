@@ -111,12 +111,12 @@ export class GoalService {
 
     if (!existing) return null
 
-    const newAmount = Number(existing.currentAmount) + amount
-
     const goal = await prisma.goal.update({
       where: { id },
       data: {
-        currentAmount: new Prisma.Decimal(newAmount.toFixed(2)),
+        currentAmount: {
+          increment: new Prisma.Decimal(amount.toFixed(2)),
+        },
       },
     })
 

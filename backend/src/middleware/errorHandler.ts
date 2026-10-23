@@ -57,10 +57,14 @@ export const globalErrorHandler = (
   }
 
   const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500
+  const message =
+    statusCode === 500 && !isDevelopment
+      ? 'An unexpected server error occurred'
+      : err.message || 'Internal server error'
 
   res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal server error',
+    message,
     ...(isDevelopment && { stack: err.stack }),
   })
 }

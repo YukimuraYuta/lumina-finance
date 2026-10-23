@@ -1,25 +1,26 @@
 import apiClient from './api'
 import type { UserProfile } from '../types/finance'
 
-export const AUTH_TOKEN_KEY = 'lumina_auth_token'
 export const AUTH_USER_KEY = 'lumina_auth_user'
 
+export interface SafeUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  currency: string
+  theme: 'dark' | 'light' | 'system'
+  createdAt: string
+}
+
 export interface AuthResponse {
-  user: {
-    id: string
-    name: string
-    email: string
-    role: string
-    currency: string
-    theme: 'dark' | 'light' | 'system'
-    createdAt: string
-  }
-  token: string
+  user: SafeUser
+  token?: string
 }
 
 export const authService = {
   /**
-   * Register a new user account
+   * Register a new user account (sets HTTP-only cookie on server)
    */
   register: async (data: {
     name: string
@@ -33,15 +34,14 @@ export const authService = {
       '/auth/register',
       data
     )
-    if (res.data.data.token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, res.data.data.token)
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data.user))
+    if (res.data.data.user) {
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data.user))
     }
     return res.data.data
   },
 
   /**
-   * Authenticate user with email and password
+   * Authenticate user with email and password (sets HTTP-only cookie on server)
    */
   login: async (credentials: {
     email: string
@@ -51,15 +51,14 @@ export const authService = {
       '/auth/login',
       credentials
     )
-    if (res.data.data.token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, res.data.data.token)
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data.user))
+    if (res.data.data.user) {
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data.user))
     }
     return res.data.data
   },
 
   /**
-   * Log out user and purge stored token/user
+   * Log out user and invalidate server session cookie
    */
   logout: async (): Promise<void> => {
     try {
@@ -67,20 +66,18 @@ export const authService = {
     } catch {
       // Ignore network errors during logout
     } finally {
-      localStorage.removeItem(AUTH_TOKEN_KEY)
+      sessionStorage.removeItem(AUTH_USER_KEY)
       localStorage.removeItem(AUTH_USER_KEY)
     }
   },
 
   /**
-   * Fetch current authenticated user from server
+   * Fetch current authenticated user from server using active session cookie
    */
-  getMe: async (): Promise<AuthResponse['user']> => {
-    const res = await apiClient.get<{ success: boolean; data: AuthResponse['user'] }>(
-      '/auth/me'
-    )
+  getMe: async (): Promise<SafeUser> => {
+    const res = await apiClient.get<{ success: boolean; data: SafeUser }>('/auth/me')
     if (res.data.data) {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data))
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data))
     }
     return res.data.data
   },
@@ -88,13 +85,13 @@ export const authService = {
   /**
    * Update user profile attributes
    */
-  updateProfile: async (profile: Partial<UserProfile>): Promise<AuthResponse['user']> => {
+  updateProfile: async (profile: Partial<UserProfile>): Promise<SafeUser> => {
     const res = await apiClient.patch<{
       success: boolean
-      data: AuthResponse['user']
+      data: SafeUser
     }>('/auth/profile', profile)
     if (res.data.data) {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data))
+      sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data.data))
     }
     return res.data.data
   },
@@ -110,17 +107,11 @@ export const authService = {
   },
 
   /**
-   * Get stored token
+   * Get cached session user (non-sensitive profile information)
    */
-  getToken: (): string | null => {
-    return localStorage.getItem(AUTH_TOKEN_KEY)
-  },
-
-  /**
-   * Get stored cached user
-   */
-  getStoredUser: (): AuthResponse['user'] | null => {
-    const userStr = localStorage.getItem(AUTH_USER_KEY)
+  getStoredUser: (): SafeUser | null => {
+    const userStr =
+      sessionStorage.getItem(AUTH_USER_KEY) || localStorage.getItem(AUTH_USER_KEY)
     if (!userStr) return null
     try {
       return JSON.parse(userStr)

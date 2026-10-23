@@ -1,10 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { authService, type AuthResponse } from '../services/authService'
+import { authService, type SafeUser } from '../services/authService'
 import type { UserProfile } from '../types/finance'
 
 interface AuthContextType {
-  user: AuthResponse['user'] | null
-  token: string | null
+  user: SafeUser | null
   isAuthenticated: boolean
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
@@ -17,37 +16,22 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthResponse['user'] | null>(() => authService.getStoredUser())
-  const [token, setToken] = useState<string | null>(() => authService.getToken())
+  const [user, setUser] = useState<SafeUser | null>(() => authService.getStoredUser())
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
-  // Verify and hydrate current user on mount if token exists
+  // Verify and hydrate current user on mount via secure HTTP-only cookie
   useEffect(() => {
     let isMounted = true
 
     const verifySession = async () => {
-      const savedToken = authService.getToken()
-      if (!savedToken) {
-        if (isMounted) {
-          setUser(null)
-          setToken(null)
-          setIsLoading(false)
-        }
-        return
-      }
-
       try {
         const verifiedUser = await authService.getMe()
         if (isMounted) {
           setUser(verifiedUser)
-          setToken(savedToken)
         }
-      } catch (err) {
-        console.warn('Session verification failed, clearing credentials:', err)
+      } catch {
         if (isMounted) {
-          await authService.logout()
           setUser(null)
-          setToken(null)
         }
       } finally {
         if (isMounted) {
@@ -58,27 +42,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     verifySession()
 
+    const handleAuthExpired = () => {
+      setUser(null)
+    }
+
+    window.addEventListener('lumina-auth-expired', handleAuthExpired)
+
     return () => {
       isMounted = false
+      window.removeEventListener('lumina-auth-expired', handleAuthExpired)
     }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await authService.login({ email, password })
     setUser(res.user)
-    setToken(res.token)
   }, [])
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     const res = await authService.register({ name, email, password })
     setUser(res.user)
-    setToken(res.token)
   }, [])
 
   const logout = useCallback(async () => {
     await authService.logout()
     setUser(null)
-    setToken(null)
   }, [])
 
   const updateUser = useCallback(async (profile: Partial<UserProfile>) => {
@@ -95,8 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     user,
-    token,
-    isAuthenticated: Boolean(token && user),
+    isAuthenticated: Boolean(user),
     isLoading,
     login,
     register,

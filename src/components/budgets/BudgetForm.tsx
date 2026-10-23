@@ -101,7 +101,7 @@ const BudgetFormContent: React.FC<Omit<BudgetFormProps, 'isOpen'>> = ({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} aria-hidden="true">
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}

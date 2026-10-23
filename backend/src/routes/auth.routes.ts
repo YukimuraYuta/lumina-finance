@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { AuthController } from '../controllers/auth.controller'
 import { validate } from '../middleware/validate.middleware'
 import { authenticate } from '../middleware/auth.middleware'
-import { authRateLimiter } from '../middleware/rateLimiter'
+import { authRateLimiter, passwordChangeRateLimiter } from '../middleware/rateLimiter'
 import {
   registerSchema,
   loginSchema,
@@ -35,6 +35,7 @@ router.get('/me', authenticate, AuthController.getMe)
 router.patch(
   '/change-password',
   authenticate,
+  passwordChangeRateLimiter,
   validate({ body: changePasswordSchema }),
   AuthController.changePassword
 )

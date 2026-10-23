@@ -17,7 +17,7 @@ const DeleteBudgetModal: React.FC<DeleteBudgetModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="modal-backdrop" onClick={onClose} aria-hidden="true">
+    <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-content modal-content-sm"
         onClick={(e) => e.stopPropagation()}
