@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   User,
@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../context/AuthContext'
 
 const Register: React.FC = () => {
-  const { register } = useAuth()
+  const { register, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
@@ -23,6 +23,13 @@ const Register: React.FC = () => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+
+  // Redirect authenticated users away from register page
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 

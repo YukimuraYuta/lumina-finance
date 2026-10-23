@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import request from 'supertest'
 import app from '../app'
 
@@ -10,10 +10,11 @@ describe('Lumina Finance Authentication & Security Suite', () => {
   }
 
   let authToken: string
+  let authCookie: string
   let authUserId: string
 
   describe('User Registration (POST /api/auth/register)', () => {
-    it('creates new user account and returns safe user with JWT token', async () => {
+    it('creates new user account, sets HTTP-only cookie, and returns safe user with JWT token', async () => {
       const res = await request(app).post('/api/auth/register').send(testUser)
 
       expect(res.status).toBe(201)
@@ -26,7 +27,13 @@ describe('Lumina Finance Authentication & Security Suite', () => {
       // Strict security requirement: never leak password or hash in response
       expect(res.body.data.user.password).toBeUndefined()
 
+      // Verify HTTP-only cookie is set
+      const cookies = res.headers['set-cookie']
+      expect(cookies).toBeDefined()
+      expect(cookies.some((c: string) => c.includes('token=') && c.includes('HttpOnly'))).toBe(true)
+
       authToken = res.body.data.token
+      authCookie = cookies.find((c: string) => c.includes('token=')) || ''
       authUserId = res.body.data.user.id
     })
 
@@ -63,8 +70,8 @@ describe('Lumina Finance Authentication & Security Suite', () => {
     })
   })
 
-  describe('User Login (POST /api/auth/login)', () => {
-    it('authenticates valid credentials and returns safe user with token', async () => {
+  describe('User Login & Logout (POST /api/auth/login, POST /api/auth/logout)', () => {
+    it('authenticates valid credentials, sets HTTP-only cookie, and returns safe user with token', async () => {
       const res = await request(app).post('/api/auth/login').send({
         email: testUser.email,
         password: testUser.password,
@@ -74,6 +81,21 @@ describe('Lumina Finance Authentication & Security Suite', () => {
       expect(res.body.success).toBe(true)
       expect(res.body.data.token).toBeDefined()
       expect(res.body.data.user.password).toBeUndefined()
+
+      const cookies = res.headers['set-cookie']
+      expect(cookies).toBeDefined()
+      expect(cookies.some((c: string) => c.includes('token=') && c.includes('HttpOnly'))).toBe(true)
+    })
+
+    it('clears HTTP-only cookie on POST /api/auth/logout', async () => {
+      const res = await request(app).post('/api/auth/logout')
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      const cookies = res.headers['set-cookie']
+      expect(cookies).toBeDefined()
+      // Cookie is cleared by setting expires in the past or empty value
+      expect(cookies.some((c: string) => c.includes('token=;') || c.includes('token=; Max-Age=0') || c.includes('Expires='))).toBe(true)
     })
 
     it('rejects incorrect password with generic 401 error', async () => {
@@ -99,8 +121,8 @@ describe('Lumina Finance Authentication & Security Suite', () => {
     })
   })
 
-  describe('Current User Profile (GET /api/auth/me)', () => {
-    it('returns authenticated user profile when valid Bearer token is provided', async () => {
+  describe('Authentication Strategies & Middleware (Bearer Token vs Cookie)', () => {
+    it('authenticates successfully via Bearer Authorization header', async () => {
       const res = await request(app)
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${authToken}`)
@@ -111,7 +133,17 @@ describe('Lumina Finance Authentication & Security Suite', () => {
       expect(res.body.data.email).toBe(testUser.email.toLowerCase())
     })
 
-    it('rejects request without token with 401 Unauthorized', async () => {
+    it('authenticates successfully via HTTP-only Cookie without Authorization header', async () => {
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', authCookie)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.id).toBe(authUserId)
+    })
+
+    it('rejects request without credentials with 401 Unauthorized', async () => {
       const res = await request(app)
         .get('/api/auth/me')
         .set('x-disable-dev-auth', 'true')
@@ -123,7 +155,7 @@ describe('Lumina Finance Authentication & Security Suite', () => {
     it('rejects invalid / tampered token with 401 Unauthorized', async () => {
       const res = await request(app)
         .get('/api/auth/me')
-        .set('Authorization', 'Bearer invalid.jwt.token')
+        .set('Authorization', 'Bearer invalid.tampered.token')
 
       expect(res.status).toBe(401)
       expect(res.body.success).toBe(false)
@@ -185,15 +217,17 @@ describe('Lumina Finance Authentication & Security Suite', () => {
   })
 
   describe('User Data Isolation Boundary', () => {
-    it('ensures User B cannot access or view User A data', async () => {
+    let userBToken: string
+
+    it('proves User B cannot access User A transactions', async () => {
       // 1. User A creates a transaction
       const txRes = await request(app)
         .post('/api/transactions')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          description: 'Secret User A Transaction',
+          description: 'User A Private Tuition',
           category: 'Education',
-          amount: 1500,
+          amount: 2500,
           type: 'expense',
           date: new Date().toISOString(),
         })
@@ -202,14 +236,14 @@ describe('Lumina Finance Authentication & Security Suite', () => {
 
       // 2. Register User B
       const userBRes = await request(app).post('/api/auth/register').send({
-        name: 'User B',
-        email: `userb.${Date.now()}@lumina.test`,
+        name: 'User B Person',
+        email: `isolation.userb.${Date.now()}@lumina.test`,
         password: 'UserBPassword123!',
       })
       expect(userBRes.status).toBe(201)
-      const userBToken = userBRes.body.data.token
+      userBToken = userBRes.body.data.token
 
-      // 3. User B lists transactions -> should NOT contain User A's transaction
+      // 3. User B lists transactions -> User A's transaction is excluded
       const listRes = await request(app)
         .get('/api/transactions')
         .set('Authorization', `Bearer ${userBToken}`)
@@ -217,11 +251,83 @@ describe('Lumina Finance Authentication & Security Suite', () => {
       const found = listRes.body.data.some((tx: any) => tx.id === userATxId)
       expect(found).toBe(false)
 
-      // 4. User B attempts to access User A's transaction directly -> should return 404
+      // 4. User B direct GET on User A's transaction -> 404
       const getSingleRes = await request(app)
         .get(`/api/transactions/${userATxId}`)
         .set('Authorization', `Bearer ${userBToken}`)
       expect(getSingleRes.status).toBe(404)
+
+      // 5. User B direct DELETE on User A's transaction -> 404
+      const deleteRes = await request(app)
+        .delete(`/api/transactions/${userATxId}`)
+        .set('Authorization', `Bearer ${userBToken}`)
+      expect(deleteRes.status).toBe(404)
+    })
+
+    it('proves User B cannot update or delete User A budgets', async () => {
+      // User A creates a budget
+      const budgetRes = await request(app)
+        .post('/api/budgets')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          category: 'Shopping',
+          limit: 3000,
+          period: 'monthly',
+          startDate: new Date().toISOString(),
+        })
+      expect(budgetRes.status).toBe(201)
+      const userABudgetId = budgetRes.body.data.id
+
+      // User B attempts to update User A's budget -> 404
+      const updateRes = await request(app)
+        .patch(`/api/budgets/${userABudgetId}`)
+        .set('Authorization', `Bearer ${userBToken}`)
+        .send({ limit: 9999 })
+      expect(updateRes.status).toBe(404)
+
+      // User B attempts to delete User A's budget -> 404
+      const deleteRes = await request(app)
+        .delete(`/api/budgets/${userABudgetId}`)
+        .set('Authorization', `Bearer ${userBToken}`)
+      expect(deleteRes.status).toBe(404)
+    })
+
+    it('proves User B cannot access or contribute to User A goals', async () => {
+      // User A creates a goal
+      const goalRes = await request(app)
+        .post('/api/goals')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          title: 'User A Secret Dream Goal',
+          targetAmount: 50000,
+          currentAmount: 10000,
+        })
+      expect(goalRes.status).toBe(201)
+      const userAGoalId = goalRes.body.data.id
+
+      // User B attempts to view User A's goal -> 404
+      const getRes = await request(app)
+        .get(`/api/goals/${userAGoalId}`)
+        .set('Authorization', `Bearer ${userBToken}`)
+      expect(getRes.status).toBe(404)
+
+      // User B attempts to contribute to User A's goal -> 404
+      const contributeRes = await request(app)
+        .post(`/api/goals/${userAGoalId}/contribute`)
+        .set('Authorization', `Bearer ${userBToken}`)
+        .send({ amount: 500 })
+      expect(contributeRes.status).toBe(404)
+    })
+
+    it('proves analytics calculate only the current user records', async () => {
+      const analyticsRes = await request(app)
+        .get('/api/analytics/summary')
+        .set('Authorization', `Bearer ${userBToken}`)
+
+      expect(analyticsRes.status).toBe(200)
+      // User B has created 0 transactions, so totals must be 0
+      expect(analyticsRes.body.data.totalIncome).toBe(0)
+      expect(analyticsRes.body.data.totalExpenses).toBe(0)
     })
   })
 })

@@ -2,6 +2,16 @@ import { Response, NextFunction } from 'express'
 import { AuthService } from '../services/auth.service'
 import { AuthenticatedRequest } from '../middleware/auth.middleware'
 
+const isProduction = process.env.NODE_ENV === 'production'
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax' as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  path: '/',
+}
+
 export class AuthController {
   /**
    * Register a new user
@@ -14,6 +24,7 @@ export class AuthController {
   ) {
     try {
       const result = await AuthService.register(req.body)
+      res.cookie('token', result.token, cookieOptions)
       return res.status(201).json({
         success: true,
         message: 'Account created successfully',
@@ -35,6 +46,7 @@ export class AuthController {
   ) {
     try {
       const result = await AuthService.login(req.body)
+      res.cookie('token', result.token, cookieOptions)
       return res.status(200).json({
         success: true,
         message: 'Authentication successful',
@@ -55,7 +67,12 @@ export class AuthController {
     next: NextFunction
   ) {
     try {
-      // For stateless Bearer JWT, logout is primarily handled client-side by purging the token
+      res.clearCookie('token', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax' as const,
+        path: '/',
+      })
       return res.status(200).json({
         success: true,
         message: 'Logged out successfully',

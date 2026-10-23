@@ -1,5 +1,6 @@
 import express, { Application } from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import healthRoutes from './routes/health.routes'
 import transactionRoutes from './routes/transaction.routes'
 import budgetRoutes from './routes/budget.routes'
@@ -10,7 +11,7 @@ import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler'
 
 const app: Application = express()
 
-// Configure CORS for frontend access
+// Configure CORS for frontend access with explicit credentials support
 const allowedOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
 app.use(
   cors({
@@ -21,9 +22,10 @@ app.use(
   })
 )
 
-// Request body parsers
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// Request cookie & body parsers with strict size limits
+app.use(cookieParser())
+app.use(express.json({ limit: '100kb' }))
+app.use(express.urlencoded({ extended: true, limit: '100kb' }))
 
 // Register API Routes
 app.use('/api/health', healthRoutes)

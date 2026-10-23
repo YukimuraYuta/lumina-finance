@@ -6,6 +6,7 @@ const API_BASE_URL =
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -23,10 +24,14 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor: standardize error messages
+// Response interceptor: standardize error messages and clear stale auth on 401
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ message?: string; errors?: any }>) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('lumina_auth_token')
+      localStorage.removeItem('lumina_auth_user')
+    }
     const customMessage =
       error.response?.data?.message || error.message || 'An unexpected error occurred'
     return Promise.reject(new Error(customMessage))

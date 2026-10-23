@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Lock, Mail, Eye, EyeOff, LogIn, AlertCircle, Sparkles } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const Login: React.FC = () => {
-  const { login } = useAuth()
+  const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -16,6 +16,13 @@ const Login: React.FC = () => {
 
   // Redirect destination after successful login
   const from = (location.state as any)?.from?.pathname || '/'
+
+  // Redirect authenticated users away from login page
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

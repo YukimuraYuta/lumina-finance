@@ -54,9 +54,15 @@ export const authenticate = async (
     const authHeader = req.headers.authorization
     const customUserId = req.headers['x-user-id'] as string | undefined
 
-    // 1. Direct Bearer Token check
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7).trim()
+    // 1. Extract token from HTTP-only Cookie or Authorization Bearer header
+    let token: string | null = null
+    if (req.cookies && req.cookies.token) {
+      token = req.cookies.token
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim()
+    }
+
+    if (token) {
       try {
         const payload = verifyToken(token)
         const user = await prisma.user.findUnique({
@@ -66,7 +72,7 @@ export const authenticate = async (
         if (!user) {
           return res.status(401).json({
             success: false,
-            message: 'User belonging to this token no longer exists.',
+            message: 'User belonging to this session or token no longer exists.',
           })
         }
 
@@ -83,7 +89,7 @@ export const authenticate = async (
       } catch (err: any) {
         return res.status(401).json({
           success: false,
-          message: 'Invalid or expired authentication token. Please log in again.',
+          message: 'Invalid or expired authentication credentials. Please log in again.',
         })
       }
     }
