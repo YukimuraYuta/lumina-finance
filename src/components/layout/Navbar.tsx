@@ -1,7 +1,16 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Bell, Menu, UserCircle, Sun, Moon, CheckCircle2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  Bell,
+  Menu,
+  UserCircle,
+  Sun,
+  Moon,
+  CheckCircle2,
+  LogOut,
+} from 'lucide-react'
 import { useFinance } from '../../hooks/useFinance'
+import { useAuth } from '../../context/AuthContext'
 
 interface NavbarProps {
   onToggleSidebar?: () => void
@@ -9,12 +18,23 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   const { user, updateUserProfile, transactions } = useFinance()
+  const { user: authUser, logout } = useAuth()
+  const navigate = useNavigate()
   const [showNotifications, setShowNotifications] = useState(false)
 
   const toggleTheme = () => {
     const nextTheme = user.theme === 'dark' ? 'light' : 'dark'
     updateUserProfile({ theme: nextTheme })
   }
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
+  // Display authenticated user details
+  const displayName = authUser?.name || user.name
+  const displayRole = authUser?.role || user.role
 
   // Generate lightweight notification list from latest activity
   const recentAlerts = transactions.slice(0, 3)
@@ -100,10 +120,28 @@ const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
         >
           <UserCircle size={28} className="profile-avatar-icon" />
           <div className="profile-details">
-            <span className="profile-name">{user.name}</span>
-            <span className="profile-role">{user.role}</span>
+            <span className="profile-name">{displayName}</span>
+            <span className="profile-role">{displayRole}</span>
           </div>
         </Link>
+
+        {/* Logout Button */}
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={handleLogout}
+          aria-label="Log Out"
+          title="Log Out of Lumina Finance"
+          style={{
+            marginLeft: '0.25rem',
+            color: '#94a3b8',
+            transition: 'color 0.2s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+        >
+          <LogOut size={20} />
+        </button>
       </div>
     </header>
   )

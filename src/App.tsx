@@ -6,25 +6,38 @@ import Budgets from './pages/Budgets'
 import Goals from './pages/Goals'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import ProtectedRoute from './components/auth/ProtectedRoute'
+import { AuthProvider } from './context/AuthContext'
 import { FinanceProvider } from './context/FinanceContext'
 import './App.css'
 
 function App() {
   return (
-    <FinanceProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/budgets" element={<Budgets />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </FinanceProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <FinanceProvider>
+          <Routes>
+            {/* Public Authentication Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            {/* Protected Application Routes */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/transactions" element={<Transactions />} />
+                <Route path="/budgets" element={<Budgets />} />
+                <Route path="/goals" element={<Goals />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/settings" element={<Settings />} />
+              </Route>
+            </Route>
+          </Routes>
+        </FinanceProvider>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 

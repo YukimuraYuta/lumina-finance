@@ -11,6 +11,7 @@ model User {
   id           String        @id @default(uuid())
   email        String        @unique
   name         String
+  password     String        @default("$2b$10$k8YuEJttpe.rtwgoag5.leqX4Sf6kfwW7zbH1trOrKDC1eyYq5oRa")
   role         String        @default("Student")
   currency     String        @default("₹")
   theme        String        @default("system")

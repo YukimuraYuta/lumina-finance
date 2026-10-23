@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   User,
   Coins,
@@ -11,8 +11,12 @@ import {
   Sun,
   Laptop,
   Info,
+  Shield,
+  Key,
+  AlertCircle,
 } from 'lucide-react'
 import { useFinance } from '../hooks/useFinance'
+import { useAuth } from '../context/AuthContext'
 
 const CURRENCY_OPTIONS = [
   { symbol: '₹', name: 'INR (Indian Rupee)' },
@@ -34,23 +38,94 @@ const Settings: React.FC = () => {
     transactions,
     budgets,
     goals,
+    showToast,
   } = useFinance()
 
-  const [name, setName] = useState(user.name)
-  const [role, setRole] = useState(user.role)
+  const { user: authUser, updateUser, changePassword } = useAuth()
+
+  const [name, setName] = useState(authUser?.name || user.name)
+  const [role, setRole] = useState(authUser?.role || user.role)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [pwError, setPwError] = useState<string | null>(null)
+  const [pwSuccess, setPwSuccess] = useState<string | null>(null)
+  const [isChangingPw, setIsChangingPw] = useState(false)
+
+  useEffect(() => {
+    if (authUser) {
+      setName(authUser.name)
+      setRole(authUser.role)
+    }
+  }, [authUser])
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateUserProfile({ name: name.trim() || 'User', role: role.trim() || 'Student' })
+    const trimmedName = name.trim() || 'User'
+    const trimmedRole = role.trim() || 'Student'
+    try {
+      await updateUser({ name: trimmedName, role: trimmedRole })
+      updateUserProfile({ name: trimmedName, role: trimmedRole })
+      showToast('Profile updated successfully', 'success')
+    } catch {
+      updateUserProfile({ name: trimmedName, role: trimmedRole })
+    }
   }
 
-  const handleCurrencyChange = (sym: string) => {
-    updateUserProfile({ currency: sym })
+  const handleCurrencyChange = async (sym: string) => {
+    try {
+      await updateUser({ currency: sym })
+      updateUserProfile({ currency: sym })
+    } catch {
+      updateUserProfile({ currency: sym })
+    }
   }
 
-  const handleThemeChange = (theme: 'dark' | 'light' | 'system') => {
-    updateUserProfile({ theme })
+  const handleThemeChange = async (theme: 'dark' | 'light' | 'system') => {
+    try {
+      await updateUser({ theme })
+      updateUserProfile({ theme })
+    } catch {
+      updateUserProfile({ theme })
+    }
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPwError(null)
+    setPwSuccess(null)
+
+    if (!currentPassword) {
+      setPwError('Please enter your current password.')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setPwError('New password must be at least 8 characters long.')
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPwError('New passwords do not match.')
+      return
+    }
+
+    try {
+      setIsChangingPw(true)
+      await changePassword(currentPassword, newPassword)
+      setPwSuccess('Password updated successfully!')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+      showToast('Password changed successfully', 'success')
+    } catch (err: any) {
+      setPwError(err.message || 'Failed to update password. Please check your current password.')
+    } finally {
+      setIsChangingPw(false)
+    }
   }
 
   return (
@@ -58,7 +133,7 @@ const Settings: React.FC = () => {
       <header className="page-header">
         <div>
           <h1 className="page-title">Settings & Preferences</h1>
-          <p className="page-subtitle">Customize your profile, currencies, theme, and data.</p>
+          <p className="page-subtitle">Customize your profile, security, currencies, theme, and data.</p>
         </div>
       </header>
 
@@ -72,7 +147,7 @@ const Settings: React.FC = () => {
               </div>
               <div>
                 <h3 className="chart-title">User Profile</h3>
-                <p className="chart-subtitle">Personalize your student identity and role</p>
+                <p className="chart-subtitle">Personalize your student identity and email</p>
               </div>
             </div>
           </div>
@@ -108,9 +183,131 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
+            {authUser?.email && (
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Registered Email</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={authUser.email}
+                  disabled
+                  style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                />
+              </div>
+            )}
+
             <button type="submit" className="btn btn-primary btn-sm">
               <CheckCircle2 size={16} />
               <span>Update Profile</span>
+            </button>
+          </form>
+        </div>
+
+        {/* Security & Password Card */}
+        <div className="chart-card settings-section-card">
+          <div className="chart-card-header settings-header">
+            <div className="settings-header-left">
+              <div className="settings-icon-wrap" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                <Shield size={18} />
+              </div>
+              <div>
+                <h3 className="chart-title">Security & Password</h3>
+                <p className="chart-subtitle">Keep your personal finance account protected</p>
+              </div>
+            </div>
+          </div>
+
+          {pwError && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#f87171',
+                fontSize: '0.85rem',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{pwError}</span>
+            </div>
+          )}
+
+          {pwSuccess && (
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#34d399',
+                fontSize: '0.85rem',
+              }}
+            >
+              <CheckCircle2 size={16} />
+              <span>{pwSuccess}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="settings-form">
+            <div className="form-group" style={{ marginBottom: '0.85rem' }}>
+              <label htmlFor="current-pw" className="form-label">
+                Current Password
+              </label>
+              <input
+                id="current-pw"
+                type="password"
+                className="form-input"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group flex-1">
+                <label htmlFor="new-pw" className="form-label">
+                  New Password
+                </label>
+                <input
+                  id="new-pw"
+                  type="password"
+                  className="form-input"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  required
+                />
+              </div>
+
+              <div className="form-group flex-1">
+                <label htmlFor="confirm-new-pw" className="form-label">
+                  Confirm New Password
+                </label>
+                <input
+                  id="confirm-new-pw"
+                  type="password"
+                  className="form-input"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="btn btn-secondary btn-sm" disabled={isChangingPw}>
+              <Key size={16} />
+              <span>{isChangingPw ? 'Updating Password...' : 'Change Password'}</span>
             </button>
           </form>
         </div>
@@ -131,7 +328,8 @@ const Settings: React.FC = () => {
 
           <div className="currency-selector-grid">
             {CURRENCY_OPTIONS.map((c) => {
-              const isSelected = user.currency === c.symbol
+              const currentSym = authUser?.currency || user.currency
+              const isSelected = currentSym === c.symbol
               return (
                 <button
                   key={c.symbol}
@@ -210,7 +408,7 @@ const Settings: React.FC = () => {
               <div>
                 <h3 className="chart-title">Data Storage & Export</h3>
                 <p className="chart-subtitle">
-                  Currently tracking {transactions.length} transactions, {budgets.length} budgets, and {goals.length} goals in local storage
+                  Currently tracking {transactions.length} transactions, {budgets.length} budgets, and {goals.length} goals in PostgreSQL
                 </p>
               </div>
             </div>
@@ -258,7 +456,7 @@ const Settings: React.FC = () => {
               </div>
               <div>
                 <h3 className="chart-title">About Lumina Finance</h3>
-                <p className="chart-subtitle">Student Edition v1.0.0</p>
+                <p className="chart-subtitle">Student Edition v1.0.0 • Secure Authentication Enabled</p>
               </div>
             </div>
           </div>
@@ -270,9 +468,9 @@ const Settings: React.FC = () => {
             <div className="tech-stack-badges">
               <span className="tech-badge">React 19</span>
               <span className="tech-badge">TypeScript</span>
-              <span className="tech-badge">Vite</span>
-              <span className="tech-badge">Recharts</span>
-              <span className="tech-badge">Lucide Icons</span>
+              <span className="tech-badge">JWT & Bcrypt</span>
+              <span className="tech-badge">Node Express</span>
+              <span className="tech-badge">PostgreSQL & Prisma</span>
             </div>
           </div>
         </div>

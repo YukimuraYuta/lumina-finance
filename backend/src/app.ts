@@ -5,6 +5,7 @@ import transactionRoutes from './routes/transaction.routes'
 import budgetRoutes from './routes/budget.routes'
 import goalRoutes from './routes/goal.routes'
 import analyticsRoutes from './routes/analytics.routes'
+import authRoutes from './routes/auth.routes'
 import { notFoundHandler, globalErrorHandler } from './middleware/errorHandler'
 
 const app: Application = express()
@@ -26,6 +27,7 @@ app.use(express.urlencoded({ extended: true }))
 
 // Register API Routes
 app.use('/api/health', healthRoutes)
+app.use('/api/auth', authRoutes)
 app.use('/api/transactions', transactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 app.use('/api/goals', goalRoutes)
