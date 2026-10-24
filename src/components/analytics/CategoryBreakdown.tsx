@@ -8,21 +8,27 @@ import {
   Legend,
 } from 'recharts'
 import type { CategoryBreakdownItem } from '../../types/analytics'
-import { formatCurrency } from '../../utils/mockData'
+import { useFinance } from '../../hooks/useFinance'
 
 interface CategoryBreakdownProps {
   data: CategoryBreakdownItem[]
 }
 
 const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({ data }) => {
+  const { user } = useFinance()
+  const currency = user.currency || '₹'
+
   if (!data || data.length === 0) {
     return (
       <div className="chart-card">
         <div className="chart-card-header">
-          <h3 className="chart-title">Expense Categories</h3>
+          <div>
+            <h3 className="chart-title">Expense Categories</h3>
+            <p className="chart-subtitle">Expense distribution by category</p>
+          </div>
         </div>
-        <div className="empty-chart-fallback">
-          <p>No category breakdown available.</p>
+        <div className="empty-chart-fallback" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>No category breakdown available for this period.</p>
         </div>
       </div>
     )
@@ -37,7 +43,7 @@ const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({ data }) => {
         </div>
       </div>
 
-      <div className="chart-container" style={{ width: '100%', height: 300 }}>
+      <div className="chart-container" style={{ width: '100%', height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -58,12 +64,13 @@ const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({ data }) => {
               contentStyle={{
                 backgroundColor: 'var(--bg-card)',
                 borderColor: 'var(--border)',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 color: 'var(--text-h)',
-                boxShadow: 'var(--shadow)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                padding: '10px 14px',
               }}
               formatter={(value, name, item) => [
-                `${formatCurrency(Number(value) || 0)} (${item.payload.percentage}%)`,
+                `${currency}${Number(value || 0).toLocaleString()} (${item.payload.percentage}%)`,
                 name,
               ]}
               labelStyle={{ color: 'var(--text-h)', fontWeight: 600 }}
@@ -74,7 +81,7 @@ const CategoryBreakdown: React.FC<CategoryBreakdownProps> = ({ data }) => {
               iconType="circle"
               iconSize={8}
               formatter={(value: string) => (
-                <span style={{ color: 'var(--text)', fontSize: '12px', fontWeight: 500 }}>
+                <span style={{ color: 'var(--text-h)', fontSize: '12px', fontWeight: 500 }}>
                   {value}
                 </span>
               )}

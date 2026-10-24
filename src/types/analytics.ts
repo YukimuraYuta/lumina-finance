@@ -1,6 +1,7 @@
 import type { BudgetStatus } from './finance'
+import type { PeriodType } from '../utils/dateRange'
 
-export type PeriodType = 'week' | 'month' | 'quarter' | 'year'
+export type { PeriodType }
 
 export interface AnalyticsSummary {
   totalIncome: number
@@ -12,12 +13,24 @@ export interface AnalyticsSummary {
 export interface SpendingDataPoint {
   date: string
   amount: number
+  period?: string
+  income?: number
 }
 
 export interface IncomeExpenseDataPoint {
   period: string
   income: number
   expenses: number
+  netCashFlow?: number
+}
+
+export interface TrendDataPoint {
+  date: string
+  period: string
+  income: number
+  expenses: number
+  amount: number
+  netCashFlow: number
 }
 
 export interface CategoryBreakdownItem {
@@ -25,6 +38,7 @@ export interface CategoryBreakdownItem {
   amount: number
   percentage: number
   color: string
+  count?: number
 }
 
 export interface TopCategoryItem {
@@ -52,6 +66,9 @@ export interface GoalProgressItem {
   currentAmount: number
   percentage: number
   remainingAmount: number
+  deadline?: string
+  category?: string
+  color?: string
 }
 
 export interface FinancialInsight {
@@ -60,4 +77,56 @@ export interface FinancialInsight {
   description: string
   type: 'warning' | 'info' | 'success'
   category?: string
+  metric?: string
+}
+
+export interface AnalyticsOverview {
+  dateRange: {
+    startDate: string
+    endDate: string
+    prevStartDate: string
+    prevEndDate: string
+    period: string
+  }
+  current: {
+    totalIncome: number
+    totalExpenses: number
+    netCashFlow: number
+    savingsRate: number
+    incomeCount: number
+    expenseCount: number
+    transactionCount: number
+  }
+  previous: {
+    totalIncome: number
+    totalExpenses: number
+    netCashFlow: number
+    savingsRate: number
+  }
+  changes: {
+    incomeChange: number
+    expenseChange: number
+    savingsRateChange: number
+  }
+  budgets: {
+    totalLimit: number
+    totalSpent: number
+    totalRemaining: number
+    utilizationPercentage: number
+    activeCount: number
+  }
+  goals: {
+    totalTarget: number
+    totalSaved: number
+    totalRemaining: number
+    progressPercentage: number
+    activeCount: number
+  }
+}
+
+export interface AnalyticsQueryParams {
+  startDate?: string
+  endDate?: string
+  period?: PeriodType
+  interval?: 'daily' | 'monthly'
 }

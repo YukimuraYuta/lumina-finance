@@ -398,5 +398,104 @@ describe('Lumina Finance REST API Suite', () => {
       expect(res.body.success).toBe(true)
       expect(Array.isArray(res.body.data)).toBe(true)
     })
+
+    it('GET /api/analytics/overview returns structured metrics with date ranges and MoM deltas', async () => {
+      const res = await request(app)
+        .get('/api/analytics/overview?period=month')
+        .set('Authorization', `Bearer ${authToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.dateRange).toBeDefined()
+      expect(res.body.data.dateRange.period).toBe('month')
+      expect(typeof res.body.data.current.totalIncome).toBe('number')
+      expect(typeof res.body.data.current.totalExpenses).toBe('number')
+      expect(typeof res.body.data.current.netCashFlow).toBe('number')
+      expect(typeof res.body.data.current.savingsRate).toBe('number')
+      expect(res.body.data.changes).toBeDefined()
+      expect(typeof res.body.data.changes.incomeChange).toBe('number')
+      expect(typeof res.body.data.changes.expenseChange).toBe('number')
+      expect(res.body.data.budgets).toBeDefined()
+      expect(res.body.data.goals).toBeDefined()
+    })
+
+    it('GET /api/analytics/overview with invalid date range (endDate < startDate) returns 400', async () => {
+      const res = await request(app)
+        .get('/api/analytics/overview?startDate=2026-12-31&endDate=2026-01-01')
+        .set('Authorization', `Bearer ${authToken}`)
+
+      expect(res.status).toBe(400)
+      expect(res.body.success).toBe(false)
+    })
+
+    it('GET /api/analytics/trends returns multi-series interval data', async () => {
+      const res = await request(app)
+        .get('/api/analytics/trends?period=month&interval=daily')
+        .set('Authorization', `Bearer ${authToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      if (res.body.data.length > 0) {
+        const point = res.body.data[0]
+        expect(point).toHaveProperty('period')
+        expect(point).toHaveProperty('income')
+        expect(point).toHaveProperty('expenses')
+        expect(point).toHaveProperty('netCashFlow')
+      }
+    })
+
+    it('GET /api/analytics/insights returns rule-based smart insights', async () => {
+      const res = await request(app)
+        .get('/api/analytics/insights?period=month')
+        .set('Authorization', `Bearer ${authToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(Array.isArray(res.body.data)).toBe(true)
+      if (res.body.data.length > 0) {
+        const insight = res.body.data[0]
+        expect(insight).toHaveProperty('id')
+        expect(insight).toHaveProperty('title')
+        expect(insight).toHaveProperty('description')
+        expect(['warning', 'info', 'success']).toContain(insight.type)
+      }
+    })
+
+    it('validates user data isolation for analytics metrics', async () => {
+      // Register a second isolated user
+      const user2Res = await request(app).post('/api/auth/register').send({
+        name: 'Isolated Analytics User',
+        email: `isolated.analytics.${Date.now()}@lumina.test`,
+        password: 'StrongPassword123!',
+      })
+      const user2Token = user2Res.body.data.token
+
+      // Create an expense for user2
+      await request(app)
+        .post('/api/transactions')
+        .set('Authorization', `Bearer ${user2Token}`)
+        .send({
+          description: 'User2 Private Expense',
+          category: 'Shopping',
+          amount: 8888,
+          type: 'expense',
+          date: new Date().toISOString(),
+        })
+
+      // Fetch User 1 analytics overview
+      const user1Res = await request(app)
+        .get('/api/analytics/overview?period=month')
+        .set('Authorization', `Bearer ${authToken}`)
+
+      // Fetch User 2 analytics overview
+      const user2AnalyticsRes = await request(app)
+        .get('/api/analytics/overview?period=month')
+        .set('Authorization', `Bearer ${user2Token}`)
+
+      // User 2 expenses should include 8888, but User 1 must not include it
+      expect(user2AnalyticsRes.body.data.current.totalExpenses).toBe(8888)
+      expect(user1Res.body.data.current.totalExpenses).not.toBe(8888)
+    })
   })
 })

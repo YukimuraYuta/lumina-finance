@@ -1,21 +1,26 @@
 import React from 'react'
 import { Target, CheckCircle2 } from 'lucide-react'
 import type { GoalProgressItem } from '../../types/analytics'
-import { formatCurrency } from '../../utils/mockData'
+import { useFinance } from '../../hooks/useFinance'
 
 interface GoalProgressProps {
   goals: GoalProgressItem[]
 }
 
 const GoalProgress: React.FC<GoalProgressProps> = ({ goals }) => {
+  const { formatAmount } = useFinance()
+
   if (!goals || goals.length === 0) {
     return (
       <div className="chart-card">
         <div className="chart-card-header">
-          <h3 className="chart-title">Savings Goal Progress</h3>
+          <div>
+            <h3 className="chart-title">Savings Goal Progress</h3>
+            <p className="chart-subtitle">Progress towards student milestone targets</p>
+          </div>
         </div>
-        <div className="empty-chart-fallback">
-          <p>No active savings goals found.</p>
+        <div className="empty-chart-fallback" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>No active savings goals found.</p>
         </div>
       </div>
     )
@@ -26,7 +31,7 @@ const GoalProgress: React.FC<GoalProgressProps> = ({ goals }) => {
       <div className="chart-card-header">
         <div>
           <h3 className="chart-title">Savings Goal Progress</h3>
-          <p className="chart-subtitle">Progress towards student milestone goals</p>
+          <p className="chart-subtitle">Progress towards student milestone targets</p>
         </div>
       </div>
 
@@ -45,8 +50,8 @@ const GoalProgress: React.FC<GoalProgressProps> = ({ goals }) => {
                   <span className="goal-title">{goal.title}</span>
                 </div>
                 <div className="goal-amounts">
-                  <span className="goal-saved">{formatCurrency(goal.currentAmount)}</span>
-                  <span className="goal-target">/ {formatCurrency(goal.targetAmount)}</span>
+                  <span className="goal-saved">{formatAmount(goal.currentAmount)}</span>
+                  <span className="goal-target">/ {formatAmount(goal.targetAmount)}</span>
                 </div>
               </div>
 
@@ -67,7 +72,7 @@ const GoalProgress: React.FC<GoalProgressProps> = ({ goals }) => {
                 <span className="text-muted">
                   {isCompleted
                     ? 'Goal Achieved! 🎉'
-                    : `${formatCurrency(goal.remainingAmount)} left to save`}
+                    : `${formatAmount(goal.remainingAmount)} remaining`}
                 </span>
               </div>
             </div>

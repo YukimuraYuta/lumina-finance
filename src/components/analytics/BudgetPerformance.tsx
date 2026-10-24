@@ -1,7 +1,7 @@
 import React from 'react'
 import { ShieldAlert, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react'
 import type { BudgetPerformanceItem } from '../../types/analytics'
-import { formatCurrency } from '../../utils/mockData'
+import { useFinance } from '../../hooks/useFinance'
 
 interface BudgetPerformanceProps {
   items: BudgetPerformanceItem[]
@@ -11,44 +11,49 @@ const getStatusBadge = (status: BudgetPerformanceItem['status']) => {
   switch (status) {
     case 'Healthy':
       return (
-        <span className="status-badge badge-healthy">
+        <span className="status-badge badge-healthy" aria-label="Status: Healthy">
           <CheckCircle2 size={13} />
-          <span>Healthy</span>
+          <span>Within Budget</span>
         </span>
       )
     case 'Near Limit':
       return (
-        <span className="status-badge badge-warning">
+        <span className="status-badge badge-warning" aria-label="Status: Near Limit">
           <AlertCircle size={13} />
-          <span>Near Limit</span>
+          <span>Approaching (75%+)</span>
         </span>
       )
     case 'Almost Reached':
       return (
-        <span className="status-badge badge-orange">
+        <span className="status-badge badge-orange" aria-label="Status: Almost Reached Limit">
           <AlertTriangle size={13} />
-          <span>Almost Reached</span>
+          <span>Near Cap (90%+)</span>
         </span>
       )
     case 'Over Budget':
       return (
-        <span className="status-badge badge-danger">
+        <span className="status-badge badge-danger" aria-label="Status: Over Budget Limit">
           <ShieldAlert size={13} />
-          <span>Over Budget</span>
+          <span>Exceeded Limit</span>
         </span>
       )
   }
 }
 
 const BudgetPerformance: React.FC<BudgetPerformanceProps> = ({ items }) => {
+  const { formatAmount } = useFinance()
+
   if (!items || items.length === 0) {
     return (
       <div className="chart-card">
         <div className="chart-card-header">
-          <h3 className="chart-title">Budget Performance</h3>
+          <div>
+            <h3 className="chart-title">Budget Utilization</h3>
+            <p className="chart-subtitle">Category limits vs. actual expenditure</p>
+          </div>
         </div>
-        <div className="empty-chart-fallback">
-          <p>No budgets created yet.</p>
+        <div className="empty-chart-fallback" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>No active budgets created yet.</p>
         </div>
       </div>
     )
@@ -58,7 +63,7 @@ const BudgetPerformance: React.FC<BudgetPerformanceProps> = ({ items }) => {
     <div className="chart-card">
       <div className="chart-card-header">
         <div>
-          <h3 className="chart-title">Budget Performance</h3>
+          <h3 className="chart-title">Budget Utilization</h3>
           <p className="chart-subtitle">Category limits vs. actual expenditure</p>
         </div>
       </div>
@@ -76,8 +81,8 @@ const BudgetPerformance: React.FC<BudgetPerformanceProps> = ({ items }) => {
                   {getStatusBadge(item.status)}
                 </div>
                 <div className="perf-amounts">
-                  <span className="perf-spent">{formatCurrency(item.spent)}</span>
-                  <span className="perf-limit">/ {formatCurrency(item.limit)}</span>
+                  <span className="perf-spent">{formatAmount(item.spent)}</span>
+                  <span className="perf-limit">/ {formatAmount(item.limit)}</span>
                 </div>
               </div>
 
@@ -107,8 +112,8 @@ const BudgetPerformance: React.FC<BudgetPerformanceProps> = ({ items }) => {
                 </span>
                 <span className={isOver ? 'text-danger' : 'text-muted'}>
                   {isOver
-                    ? `${formatCurrency(Math.abs(item.remaining))} over limit`
-                    : `${formatCurrency(item.remaining)} remaining`}
+                    ? `${formatAmount(Math.abs(item.remaining))} over limit`
+                    : `${formatAmount(item.remaining)} remaining`}
                 </span>
               </div>
             </div>

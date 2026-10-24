@@ -1,20 +1,25 @@
 import React from 'react'
 import type { TopCategoryItem } from '../../types/analytics'
-import { formatCurrency } from '../../utils/mockData'
+import { useFinance } from '../../hooks/useFinance'
 
 interface TopCategoriesProps {
   categories: TopCategoryItem[]
 }
 
 const TopCategories: React.FC<TopCategoriesProps> = ({ categories }) => {
+  const { formatAmount } = useFinance()
+
   if (!categories || categories.length === 0) {
     return (
       <div className="chart-card">
         <div className="chart-card-header">
-          <h3 className="chart-title">Top Spending Categories</h3>
+          <div>
+            <h3 className="chart-title">Top Spending Categories</h3>
+            <p className="chart-subtitle">Ranked by total expense amount</p>
+          </div>
         </div>
-        <div className="empty-chart-fallback">
-          <p>No expense categories recorded yet.</p>
+        <div className="empty-chart-fallback" style={{ padding: '3rem 1rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>No expense categories recorded yet.</p>
         </div>
       </div>
     )
@@ -43,7 +48,7 @@ const TopCategories: React.FC<TopCategoriesProps> = ({ categories }) => {
             </div>
 
             <div className="top-cat-right">
-              <span className="top-cat-amount">{formatCurrency(item.amount)}</span>
+              <span className="top-cat-amount">{formatAmount(item.amount)}</span>
               <span className="top-cat-percent">{item.percentage}%</span>
             </div>
           </div>
